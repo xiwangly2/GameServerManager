@@ -70,6 +70,9 @@ jobs:
           - arch: arm64
             package_command: npm run package:linux:arm64
             artifact_name: gsm3-management-panel-linux-arm64-build
+          - arch: riscv64
+            package_command: npm run package:linux:riscv64
+            artifact_name: gsm3-management-panel-linux-riscv64-build
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js for build
@@ -226,6 +229,11 @@ jobs:
         with:
           name: gsm3-management-panel-linux-arm64-build
           path: linux-arm64-build/
+      - name: Download Linux riscv64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gsm3-management-panel-linux-riscv64-build
+          path: linux-riscv64-build/
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
@@ -235,6 +243,7 @@ jobs:
         run: |
           tar -czf gsm3-management-panel-linux-x64-v${{ needs.resolve_version.outputs.version }}.tar.gz -C linux-x64-build .
           tar -czf gsm3-management-panel-linux-arm64-v${{ needs.resolve_version.outputs.version }}.tar.gz -C linux-arm64-build .
+          tar -czf gsm3-management-panel-linux-riscv64-v${{ needs.resolve_version.outputs.version }}.tar.gz -C linux-riscv64-build .
           cd windows-build
           zip -r ../gsm3-management-panel-windows-v${{ needs.resolve_version.outputs.version }}.zip .
       - name: Create Release
@@ -243,6 +252,7 @@ jobs:
           files: |
             gsm3-management-panel-linux-x64-v${{ needs.resolve_version.outputs.version }}.tar.gz
             gsm3-management-panel-linux-arm64-v${{ needs.resolve_version.outputs.version }}.tar.gz
+            gsm3-management-panel-linux-riscv64-v${{ needs.resolve_version.outputs.version }}.tar.gz
             gsm3-management-panel-windows-v${{ needs.resolve_version.outputs.version }}.zip
           generate_release_notes: true
           draft: false
