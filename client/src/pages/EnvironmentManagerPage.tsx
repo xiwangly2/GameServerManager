@@ -29,6 +29,15 @@ interface JavaEnvironment {
   installStage?: 'download' | 'extract'
 }
 
+interface JavaVersionConfig {
+  version: string
+  key: string
+  description: string
+  windows: string
+  linux: string
+  arm?: string
+}
+
 interface LocalSystemInfo {
   platform: string
   rawPlatform?: string  // 原始平台标识 (win32/linux/darwin)
@@ -128,7 +137,7 @@ const EnvironmentManagerPage: React.FC = () => {
   })
 
   // Java版本配置
-  const javaVersions = [
+  const javaVersions: JavaVersionConfig[] = [
     {
       version: 'Java 8',
       key: 'java8',
@@ -169,6 +178,46 @@ const EnvironmentManagerPage: React.FC = () => {
       arm: 'https://download.xiaozhuhouses.asia/download/v1/links/k-EfIFXJeFtP2DZv-8Fn9SwLCaQWL7HhfIbTkx1xeFk'
     }
   ]
+
+  const getJavaDownloadUrl = (javaConfig: JavaVersionConfig, info: LocalSystemInfo | null): string | null => {
+    if (!info) return null
+
+    const platform = info.rawPlatform || info.platform
+    const arch = info.arch.toLowerCase()
+
+    if (platform === 'win32') {
+      return javaConfig.windows
+    }
+
+    if (platform !== 'linux') {
+      return null
+    }
+
+    if (arch === 'x64' || arch === 'x86_64' || arch === 'amd64') {
+      return javaConfig.linux
+    }
+
+    if (arch === 'arm64' || arch === 'aarch64') {
+      return javaConfig.arm || null
+    }
+
+    return null
+  }
+
+  const getJavaInstallUnsupportedMessage = (javaConfig: JavaVersionConfig, info: LocalSystemInfo | null): string | null => {
+    if (getJavaDownloadUrl(javaConfig, info)) return null
+
+    if (!info) {
+      return '系统信息未加载，暂不能选择 Java 下载包'
+    }
+
+    const platform = info.rawPlatform || info.platform
+    if (platform === 'linux' && info.arch.toLowerCase() === 'riscv64') {
+      return 'RISC-V64 暂无下载式 Java 包，请通过系统包管理器安装 OpenJDK，并在实例中使用系统 java'
+    }
+
+    return `当前平台/架构暂不支持下载式 Java 安装：${platform}/${info.arch}`
+  }
 
   // 获取系统信息
   const fetchSystemInfo = async () => {
@@ -680,16 +729,14 @@ const EnvironmentManagerPage: React.FC = () => {
       return
     }
 
-    // 根据平台和架构选择下载URL
-    let downloadUrl: string
-    if (systemInfo.platform === 'win32') {
-      downloadUrl = javaConfig.windows
-    } else if (systemInfo.arch === 'arm64' || systemInfo.arch === 'aarch64') {
-      // ARM架构
-      downloadUrl = (javaConfig as any).arm || javaConfig.linux
-    } else {
-      // x64架构
-      downloadUrl = javaConfig.linux
+    const downloadUrl = getJavaDownloadUrl(javaConfig, systemInfo)
+    if (!downloadUrl) {
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: getJavaInstallUnsupportedMessage(javaConfig, systemInfo) || '当前平台暂不支持下载式 Java 安装'
+      })
+      return
     }
 
     try {
@@ -1403,6 +1450,7 @@ const EnvironmentManagerPage: React.FC = () => {
                 const env = javaEnvironments.find(e => e.version === javaConfig.key)
                 const isInstalled = env?.installed || false
                 const isInstalling = env?.installing || false
+                const unsupportedMessage = !isInstalled ? getJavaInstallUnsupportedMessage(javaConfig, systemInfo) : null
                 
                 return (
                   <div
@@ -1440,6 +1488,13 @@ const EnvironmentManagerPage: React.FC = () => {
                     <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
                       {javaConfig.description}
                     </p>
+
+                    {unsupportedMessage && (
+                      <div className="mb-4 flex items-start space-x-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                        <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                        <span>{unsupportedMessage}</span>
+                      </div>
+                    )}
 
                     {/* 安装进度 */}
                     {isInstalling && (
@@ -1486,8 +1541,8 @@ const EnvironmentManagerPage: React.FC = () => {
                       {!isInstalled ? (
                         <button
                           onClick={() => handleInstallJava(javaConfig.key)}
-                          disabled={isInstalling}
-                          className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+                          disabled={isInstalling || !!unsupportedMessage}
+                          className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
                         >
                           {isInstalling ? (
                             <>
@@ -1497,7 +1552,7 @@ const EnvironmentManagerPage: React.FC = () => {
                           ) : (
                             <>
                               <Download className="w-4 h-4" />
-                              <span>安装</span>
+                              <span>{unsupportedMessage ? '不支持' : '安装'}</span>
                             </>
                           )}
                         </button>
